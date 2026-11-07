@@ -1,0 +1,28 @@
+[project]
+name = "kounin"
+version = "0.1.0"
+description = "人事のあの人が明日来なくても、賞与と昇給の計算は続く"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.14.2",
+    "pyyaml>=6.0.3",
+    "starlette>=1.10.0",
+    "uvicorn>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["engine/tests", "agent/tests", "ui/tests"]
+pythonpath = ["."]
+addopts = '-m "not live"'
+markers = ["live: 実モデルを呼ぶ。make eval だけで走らせる"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pre-commit>=4.7.0",
+    "pytest>=9.2.0",
+]

@@ -1,0 +1,25 @@
+# 架空の法人のパック。支給月数と原資の値はすべて架空である（SPEC §12）。
+org_id: sample
+display_name: 架空の法人
+periods:
+  - id: 2026-summer
+    name: 2026年 夏の賞与
+    evaluation: 2025-11-01..2026-04-30
+    payment_date: 2026-06-20
+  - id: 2026-winter
+    name: 2026年 冬の賞与
+    evaluation: 2026-05-01..2026-10-31
+    payment_date: 2026-12-20
+groups: [東病棟, 西病棟, 南病棟, 外来, リハビリ室, 検査室, 医事課, 総務課]
+normal_scope:
+  employment_types: [正職員]
+  has_transfer: false
+# 原資の式。比率は浮動小数にせず文字列で持つ。
+funding:
+  previous_total_yen: 320000000
+  base_share: "0.6"
+  position_months: "1.5"
+  plans:
+    - {id: A, name: 前期並み, type: same}
+    - {id: B, name: 増益を反映, type: profit_share, rate: "1/10"}
+    - {id: C, name: 抑制, type: scale, rate: "9/10"}

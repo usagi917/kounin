@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: no-real-data
+        name: 実データの混入を拒否
+        entry: uv run python scripts/check_public.py
+        language: system
+        types: [file]

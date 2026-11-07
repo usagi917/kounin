@@ -1,0 +1,24 @@
+- name: 4か月と2か月の異動は長い職場
+  input:
+    eval_end: 2026-10-31
+    segments:
+      - {group: 東病棟, start: 2026-05-01, end: 2026-08-31}
+      - {group: 西病棟, start: 2026-09-01, end: 2026-10-31}
+  expect: {matched: true, category: 例外適用, group: 東病棟}
+- name: 異動のない人には当たらない
+  input: {eval_end: 2026-10-31, group: 外来}
+  expect: {matched: false, category: 通常ルール適用, group: 外来}
+- name: 応援が4か月以上は止まる
+  input:
+    eval_end: 2026-10-31
+    segments:
+      - {group: 東病棟, start: 2026-05-01, end: 2026-06-30}
+      - {group: 西病棟, start: 2026-07-01, end: 2026-10-31, kind: 応援}
+  expect: {matched: true, category: 判断未登録}
+- name: 3か月ずつは同点で止まる
+  input:
+    eval_end: 2026-10-31
+    segments:
+      - {group: 東病棟, start: 2026-05-01, end: 2026-07-31}
+      - {group: 西病棟, start: 2026-08-01, end: 2026-10-31}
+  expect: {matched: true, category: 判断未登録}

@@ -1,0 +1,19 @@
+# 実データは絶対にコミットしない
+data/raw/
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.csv.real
+
+# 実行時の状態と秘密
+var/
+.env
+
+# 開発環境
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+claude-lock.json

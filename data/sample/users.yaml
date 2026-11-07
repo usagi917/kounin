@@ -1,0 +1,9 @@
+# 架空環境の利用者。全員架空である。ログインできるのは人事担当だけで、ほかの人へは一時URLで聞く。役割はここから読む。
+# パスワードは架空環境の見本で、README に書いてある。手元環境では別のものにする。
+users:
+  - {id: hr, name: 雨宮 文, role: 人事担当, login_id: amamiya, password_hash: 'scrypt$KdfDZZNmHra96zitv3biHA==$x/Sh1MCxdYik46oam4NqM3HK4vtGV7AKHAK75oZ1/5xCbV/FRiNIwf+Vm0QKQHo/KtWvV4vHiUWW8Gifi7J94g=='}
+  - {id: predecessor, name: 千歳 澄, role: 前任}
+  - {id: boss-a, name: 鳥海 樹, role: 上司, groups: [東病棟, 西病棟, 南病棟]}
+  - {id: boss-b, name: 涼風 奏, role: 上司, groups: [外来, リハビリ室, 検査室]}
+  - {id: boss-c, name: 南雲 望, role: 上司, groups: [医事課, 総務課]}
+  - {id: chair, name: 楠見 悠, role: 理事長}

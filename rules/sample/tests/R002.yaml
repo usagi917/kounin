@@ -1,0 +1,6 @@
+- name: 入職2か月はB
+  input: {hire_date: 2026-03-01, eval_end: 2026-04-30, grade_input: A}
+  expect: {grade: B}
+- name: 入職4か月ちょうどは入力どおり
+  input: {hire_date: 2025-12-30, eval_end: 2026-04-30, grade_input: A}
+  expect: {grade: A}

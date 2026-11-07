@@ -1,0 +1,221 @@
+# fixed8 の期待値。engine を使わず別の式で出した。検算シートで本人が確かめる（PLAN F2-0b、F2-0c）。
+held:
+  total_base_pay: 1928800
+  base_months: '1.320'
+  amount_months: '0.880'
+  amount_fund: 1697344
+  total_points: '1063.0'
+  unit_price: 1597
+  unallocated_points: '15.4'
+  group_shares:
+    X: '13.0'
+    Y: '8.3'
+  total_amount: 3725000
+  employees:
+    G1:
+      group: X
+      status: 暫定
+      base_pay: 296000
+      points: '187.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '200.0'
+      base_linked: 410256
+      amount_part: 319400
+      distribution_yen: 21000
+      amount: 730000
+    G2:
+      group: X
+      status: 暫定
+      base_pay: 243500
+      points: '132.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '145.0'
+      base_linked: 321420
+      amount_part: 231565
+      distribution_yen: 21000
+      amount: 553000
+    G3:
+      group: X
+      status: 暫定
+      base_pay: 204000
+      points: '130.0'
+      reduction: '39.0'
+      addition: '0'
+      final_points: '91.0'
+      base_linked: 296208
+      amount_part: 145327
+      distribution_yen: 0
+      amount: 442000
+    G4:
+      group: X
+      status: 暫定
+      base_pay: 243800
+      points: '90.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '103.0'
+      base_linked: 305725
+      amount_part: 164491
+      distribution_yen: 21000
+      amount: 470000
+    G5:
+      group: Y
+      status: 暫定
+      base_pay: 200000
+      points: '110.0'
+      reduction: '16.5'
+      addition: '0'
+      final_points: '93.5'
+      base_linked: 264000
+      amount_part: 149320
+      distribution_yen: 0
+      amount: 413000
+    G6:
+      group: Y
+      status: 暫定
+      base_pay: 290000
+      points: '170.0'
+      reduction: '0'
+      addition: '8.3'
+      final_points: '178.3'
+      base_linked: 401940
+      amount_part: 284745
+      distribution_yen: 13000
+      amount: 687000
+    G7:
+      group: Y
+      status: 暫定
+      base_pay: 206500
+      points: '90.0'
+      reduction: '0'
+      addition: '8.3'
+      final_points: '98.3'
+      base_linked: 272580
+      amount_part: 156985
+      distribution_yen: 13000
+      amount: 430000
+    G8:
+      group: null
+      status: 保留
+      base_pay: 245000
+      points: '154.0'
+      reduction: '15.4'
+      addition: '0'
+      final_points: '138.6'
+      base_linked: 339570
+      amount_part: 221344
+      distribution_yen: 0
+      amount: null
+  rounding_residual: null
+resolved:
+  total_base_pay: 1928800
+  base_months: '1.320'
+  amount_months: '0.880'
+  amount_fund: 1697344
+  total_points: '1063.0'
+  unit_price: 1597
+  unallocated_points: '0'
+  group_shares:
+    X: '13.0'
+    Y: '16.0'
+  total_amount: 4310000
+  employees:
+    G1:
+      group: X
+      status: 確定
+      base_pay: 296000
+      points: '187.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '200.0'
+      base_linked: 410256
+      amount_part: 319400
+      distribution_yen: 21000
+      amount: 730000
+    G2:
+      group: X
+      status: 確定
+      base_pay: 243500
+      points: '132.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '145.0'
+      base_linked: 321420
+      amount_part: 231565
+      distribution_yen: 21000
+      amount: 553000
+    G3:
+      group: X
+      status: 確定
+      base_pay: 204000
+      points: '130.0'
+      reduction: '39.0'
+      addition: '0'
+      final_points: '91.0'
+      base_linked: 296208
+      amount_part: 145327
+      distribution_yen: 0
+      amount: 442000
+    G4:
+      group: X
+      status: 確定
+      base_pay: 243800
+      points: '90.0'
+      reduction: '0'
+      addition: '13.0'
+      final_points: '103.0'
+      base_linked: 305725
+      amount_part: 164491
+      distribution_yen: 21000
+      amount: 470000
+    G5:
+      group: Y
+      status: 確定
+      base_pay: 200000
+      points: '110.0'
+      reduction: '16.5'
+      addition: '0'
+      final_points: '93.5'
+      base_linked: 264000
+      amount_part: 149320
+      distribution_yen: 0
+      amount: 413000
+    G6:
+      group: Y
+      status: 確定
+      base_pay: 290000
+      points: '170.0'
+      reduction: '0'
+      addition: '16.0'
+      final_points: '186.0'
+      base_linked: 401940
+      amount_part: 297042
+      distribution_yen: 26000
+      amount: 699000
+    G7:
+      group: Y
+      status: 確定
+      base_pay: 206500
+      points: '90.0'
+      reduction: '0'
+      addition: '16.0'
+      final_points: '106.0'
+      base_linked: 272580
+      amount_part: 169282
+      distribution_yen: 26000
+      amount: 442000
+    G8:
+      group: Y
+      status: 確定
+      base_pay: 245000
+      points: '154.0'
+      reduction: '15.4'
+      addition: '0'
+      final_points: '138.6'
+      base_linked: 339570
+      amount_part: 221344
+      distribution_yen: 0
+      amount: 561000
+  rounding_residual: -66640

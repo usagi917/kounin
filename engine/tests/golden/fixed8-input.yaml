@@ -1,0 +1,49 @@
+# 手計算の固定データ。8人、分配グループ2つ。値はすべて合成で、実在の法人の係数ではない。
+# 通常、例外、再分配を含む。held は保留ありの試算、resolved はその解消後である。受け手0人は単体テストで試す。
+coefficients:
+  base_pay:
+    1:
+      1: {1: 200000, 2: 204000}
+      2: {1: 240000, 2: 245000}
+      3: {1: 290000, 2: 296000}
+  grade_points:
+    1: {S: "130", A: "115", B: "100", C: "85"}
+    2: {S: "160", A: "140", B: "120", C: "100"}
+    3: {S: "195", A: "170", B: "145", C: "120"}
+  job_coefficients: {看護: "1.1", 介護: "1", 事務: "0.9"}
+  rank_coefficients: {S: "1.1", A: "1.05", B: "1", C: "0.95"}
+funding:
+  total_months: "2.2"
+  base_share: "0.6"
+employees:
+  - {emp_id: G1, display_name: 合成一, employment_type: 正職員, job_type: 看護, table_no: 1, grade: 3, step: 2, adjustment_pay: 0, rank: A, attendance_coefficient: "1", segments: [{group: X, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G2, display_name: 合成二, employment_type: 正職員, job_type: 看護, table_no: 1, grade: 2, step: 1, adjustment_pay: 3500, rank: B, attendance_coefficient: "1", segments: [{group: X, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G3, display_name: 合成三, employment_type: 正職員, job_type: 介護, table_no: 1, grade: 1, step: 2, adjustment_pay: 0, rank: S, attendance_coefficient: "0.7", segments: [{group: X, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G4, display_name: 合成四, employment_type: 正職員, job_type: 事務, table_no: 1, grade: 2, step: 2, adjustment_pay: -1200, rank: C, attendance_coefficient: "1", segments: [{group: X, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G5, display_name: 合成五, employment_type: 正職員, job_type: 看護, table_no: 1, grade: 1, step: 1, adjustment_pay: 0, rank: B, attendance_coefficient: "0.85", segments: [{group: Y, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G6, display_name: 合成六, employment_type: 正職員, job_type: 介護, table_no: 1, grade: 3, step: 1, adjustment_pay: 0, rank: A, attendance_coefficient: "1", segments: [{group: Y, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G7, display_name: 合成七, employment_type: 正職員, job_type: 事務, table_no: 1, grade: 1, step: 2, adjustment_pay: 2500, rank: B, attendance_coefficient: "1", segments: [{group: Y, start: 2026-05-01, end: 2026-10-31}]}
+  - {emp_id: G8, display_name: 合成八, employment_type: 正職員, job_type: 看護, table_no: 1, grade: 2, step: 2, adjustment_pay: 0, rank: A, attendance_coefficient: "0.9", segments: [{group: X, start: 2026-05-01, end: 2026-07-31, kind: 通常}, {group: Y, start: 2026-08-01, end: 2026-10-31, kind: 通常}]}
+scenarios:
+  held:
+    # G8 は職場 X と Y の候補を持つ保留。X と Y の全員が暫定になる。
+    placements:
+      - {emp_id: G1, group: X}
+      - {emp_id: G2, group: X}
+      - {emp_id: G3, group: X}
+      - {emp_id: G4, group: X, rule_ids: [R010]}
+      - {emp_id: G5, group: Y}
+      - {emp_id: G6, group: Y}
+      - {emp_id: G7, group: Y}
+      - {emp_id: G8, held: true, candidates: [X, Y]}
+  resolved:
+    # 人が G8 を Y と判断した後。全員が確定する。
+    placements:
+      - {emp_id: G1, group: X}
+      - {emp_id: G2, group: X}
+      - {emp_id: G3, group: X}
+      - {emp_id: G4, group: X, rule_ids: [R010]}
+      - {emp_id: G5, group: Y}
+      - {emp_id: G6, group: Y}
+      - {emp_id: G7, group: Y}
+      - {emp_id: G8, group: Y, rule_ids: [D1]}
