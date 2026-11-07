@@ -130,7 +130,7 @@ class JudgeResult(Strict):
 
 
 class Decision(Strict):
-    """個別判断。その期のその人にだけ効く（PLAN §3.7）。"""
+    """個別判断。その期のその人にだけ効く。"""
     id: str
     emp_id: str
     group: str

@@ -61,7 +61,7 @@ def tenure_months_at_eval_end(emp: Employee, period: Period) -> int | None:
 
 
 def validate_vocabulary(rule: Rule, ranks: set[str] | None = None) -> None:
-    """語彙の検査（PLAN §3.4）。型で防げない値の誤りを日本語の理由で拒否する。"""
+    """語彙の検査。型で防げない値の誤りを日本語の理由で拒否する。"""
     if rule.when.tenure_months_at_eval_end is not None:
         parse_comparison(rule.when.tenure_months_at_eval_end)
     if rule.then.group_basis is None and rule.then.grade is None:

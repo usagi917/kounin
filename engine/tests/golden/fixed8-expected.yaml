@@ -1,4 +1,4 @@
-# fixed8 の期待値。engine を使わず別の式で出した。検算シートで本人が確かめる（PLAN F2-0b、F2-0c）。
+# fixed8 の期待値。engine を使わず別の式で出した。検算シートで本人が確かめる。
 held:
   total_base_pay: 1928800
   base_months: '1.320'

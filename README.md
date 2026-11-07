@@ -63,9 +63,7 @@ make demo       # 確認まで終えた架空環境を http://127.0.0.1:8030/ �
 | 順 | 文書 | 分かること |
 | --- | --- | --- |
 | 1 | [SPEC.md](SPEC.md) | 何を作るか、受け入れ条件、公開の範囲 |
-| 2 | [PLAN.md](PLAN.md) | どう作るか、段階、中止線 |
-| 3 | [TASK.md](TASK.md) | 次にやること |
-| 4 | [CLAUDE.md](CLAUDE.md) | 作業で守ること |
+| 2 | [CLAUDE.md](CLAUDE.md) | 作業で守ること |
 
 ## 検証
 

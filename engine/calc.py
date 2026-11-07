@@ -1,4 +1,4 @@
-"""賞与の計算。手順は PLAN §3.12 と docs/production-plan.md の「計算」のとおり。純粋関数で、金額は整数の円、点数は Fraction で持つ。"""
+"""賞与の計算。純粋関数で、金額は整数の円、点数は Fraction で持つ。"""
 
 from collections.abc import Mapping
 from fractions import Fraction
