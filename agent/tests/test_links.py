@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agent.core import links, month as months, workspace
+from agent.core import demo, links, month as months, workspace
 
 MONTH = "2026-10"
 HR = {"id": "hr", "name": "雨宮 文", "role": "人事担当"}
@@ -15,6 +15,7 @@ AT = datetime(2026, 11, 7, 3, 0, tzinfo=UTC)
 def home(tmp_path):
     path = tmp_path / "home"
     workspace.init_sample(path)
+    demo.load_sample(path)
     months.run(path, MONTH, HR)
     return path
 

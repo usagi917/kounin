@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.core import audit, changes, decisions, inbox, ingest, month as months, teach
+from agent.core import audit, changes, decisions, demo, inbox, ingest, month as months, teach
 from agent.core import pack as packs
 from agent.core import workspace
 from synth.generate import generate
@@ -22,6 +22,7 @@ FIXES = workspace.ROOT / "data" / "sample" / "fixes"
 def home(tmp_path) -> Path:
     path = tmp_path / "home"
     workspace.init_sample(path)
+    demo.load_sample(path)
     return path
 
 

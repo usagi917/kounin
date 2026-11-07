@@ -1,4 +1,4 @@
-"""確認まで終えた架空環境を作る。人が画面でする操作を、同じ関数で順に行う。
+"""見本のデータを入れた架空環境を作る。人が画面でする操作を、同じ関数で順に行う。
 
 `python -m agent.core.demo` で `KOUNIN_HOME` の架空環境を作り直す。手元環境は拒否する（INV21）。
 """
@@ -7,16 +7,36 @@ from pathlib import Path
 
 from agent.core import ingest, inbox, links, month as months
 from agent.core import pack as packs
-from agent.core.workspace import ROOT, config, init_sample, reset_sample, resolve_home, users
+from agent.core.workspace import ROOT, SAMPLE_MONTH, config, reset_sample, resolve_home, users
 
-FIXES = ROOT / "data" / "sample" / "fixes"
+SAMPLE = ROOT / "data" / "sample"
+FIXES = SAMPLE / "fixes"
+
+
+def sample_files() -> dict[str, bytes]:
+    return {kind: (SAMPLE / SAMPLE_MONTH / f"{kind}.csv").read_bytes() for kind in ingest.UPLOADABLE}
+
+
+def human(home: Path) -> dict:
+    return next(user for user in users(home) if user["role"] == links.HR)
+
+
+def load_sample(home: Path) -> None:
+    """見本の5つのファイルを、人事担当が画面で渡すのと同じ順で入れる。"""
+    month = config(home)["current_month"]
+    files = sample_files()
+    results = ingest.check_first(files, packs.for_date(home, months.base_date(month)))
+    problems = [text for result in results.values() for text in result.errors]
+    if problems:
+        raise RuntimeError(f"見本のファイルが検査に通りません：{problems[0]}")
+    ingest.confirm_first(home, month, ingest.stage_first(home, month, files), human(home))
 
 
 def ready(home: Path) -> None:
     reset_sample(home)
-    init_sample(home)
+    load_sample(home)
     month = config(home)["current_month"]
-    hr = next(user for user in users(home) if user["role"] == links.HR)
+    hr = human(home)
     months.run(home, month, hr)
     token = ingest.stage(home, month, ingest.SEGMENTS, (FIXES / "所属.csv").read_bytes())
     ingest.confirm(home, month, ingest.SEGMENTS, token, hr)

@@ -1,5 +1,6 @@
 """画面の API。役割、CSRF、Host、宛先の検査を確かめる（INV20、AC6、AC21）。"""
 
+import base64
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from agent.core import inbox, month as months, workspace
+from agent.core import demo, inbox, month as months, workspace
 from ui.auth import Attempts, hash_password, verify_password
 from ui.server import create_app
 
@@ -18,6 +19,7 @@ MONTH = "2026-10"
 def home(tmp_path):
     path = tmp_path / "home"
     workspace.init_sample(path)
+    demo.load_sample(path)
     return path
 
 
@@ -397,6 +399,7 @@ def test_画面のスクリプトに構文の誤りがない():
 def test_質問の下書きは人事担当だけが頼めて確認の画面に出る(tmp_path):
     home = tmp_path / "home"
     workspace.init_sample(home)
+    demo.load_sample(home)
 
     async def ask(payload):
         return {"people": [{"ref": row["ref"], "questions": ["異動の予定はありますか"]} for row in payload["people"]]}
@@ -408,3 +411,79 @@ def test_質問の下書きは人事担当だけが頼めて確認の画面に�
     result = hr.post("/api/questions/draft", headers=hr_h).json()
     assert result["source"] == "claude" and result["drafts"]["boss-a"] == ["異動の予定はありますか"]
     assert hr.get("/api/inbox").json()["drafts"] == result["drafts"]
+
+
+def blank(tmp_path):
+    home = tmp_path / "blank"
+    workspace.init_sample(home)
+    return create_app(home)
+
+
+def encoded(files=None) -> dict:
+    return {kind: base64.b64encode(raw).decode() for kind, raw in (files or demo.sample_files()).items()}
+
+
+def test_データがない時も全部の画面が開ける(tmp_path):
+    hr, _ = login(blank(tmp_path))
+    data = hr.get("/api/today").json()
+    assert data["empty"] is True and data["kinds"] == ["職員", "勤怠", "所属", "考課", "決算"]
+    for path in ("/api/pulse", "/api/inbox", "/api/pay", "/api/changes", "/api/history"):
+        assert hr.get(path).status_code == 200, path
+
+
+def test_5つのファイルを置いて確定すると計算される(tmp_path):
+    hr, headers = login(blank(tmp_path))
+    result = hr.post("/api/files/first/check", json={"files": encoded()}, headers=headers).json()
+    assert result["ok"] is True and result["headcount"] == 550
+    assert result["files"]["職員"] == {"rows": 550, "errors": []}
+    assert hr.get("/api/today").json()["empty"] is True
+    done = hr.post("/api/files/first/confirm", json={"token": result["token"]}, headers=headers).json()
+    assert done == {"version": 1, "grew": True, "stopped": 13}
+    today = hr.get("/api/today").json()
+    assert "empty" not in today and today["run"]["total"] == 550 and today["headcount"] == 550
+
+
+def test_検査に当たるファイルがあると札を出さず1行も入らない(tmp_path):
+    hr, headers = login(blank(tmp_path))
+    files = demo.sample_files()
+    files["勤怠"] = files["勤怠"].replace(b"000101,", b"999999,", 1)
+    result = hr.post("/api/files/first/check", json={"files": encoded(files)}, headers=headers).json()
+    assert result["ok"] is False and "token" not in result
+    assert result["files"]["勤怠"]["errors"] and result["files"]["職員"]["errors"] == []
+    assert hr.get("/api/today").json()["empty"] is True
+
+
+def test_最初のデータは入力がある環境では受け取らない(app):
+    hr, headers = login(app)
+    response = hr.post("/api/files/first/check", json={"files": encoded()}, headers=headers)
+    assert response.status_code == 400 and "もう" in response.json()["error"]
+
+
+def test_最初のデータの送り方が違うと日本語で断る(tmp_path):
+    hr, headers = login(blank(tmp_path))
+    for sent in ({}, {"files": "x"}, {"files": {"職員": "%%%"}}):
+        response = hr.post("/api/files/first/check", json=sent, headers=headers)
+        assert response.status_code == 400, sent
+        assert response.json()["error"]
+
+
+def test_最初のデータもログインとCSRFを通す(tmp_path):
+    app = blank(tmp_path)
+    assert client(app).post("/api/files/first/check", json={"files": {}}).status_code == 401
+    hr, _ = login(app)
+    assert hr.post("/api/files/first/check", json={"files": {}}).status_code == 403
+    assert hr.post("/api/files/first/confirm", json={"token": "x"}).status_code == 403
+
+
+def test_計算の前は確認が終わったと見せず質問の下書きも頼まない(tmp_path):
+    home = tmp_path / "blank"
+    workspace.init_sample(home)
+    called = []
+
+    async def ask(payload):
+        called.append(payload)
+        return {"people": []}
+    hr, headers = login(create_app(home, ask))
+    assert hr.get("/api/inbox").json()["calculated"] is False
+    response = hr.post("/api/questions/draft", headers=headers)
+    assert response.status_code == 400 and "計算" in response.json()["error"] and called == []

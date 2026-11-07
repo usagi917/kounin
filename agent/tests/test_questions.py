@@ -17,6 +17,7 @@ HR = {"id": "hr", "name": "人事", "role": "人事担当"}
 def home(tmp_path) -> Path:
     path = tmp_path / "home"
     workspace.init_sample(path)
+    demo.load_sample(path)
     months.run(path, MONTH, HR)
     return path
 

@@ -1,6 +1,7 @@
 """画面の API。ログインは人事担当だけで、ほかの人は一時URLで答える。検査はここで行い、業務は agent/core へ渡す。"""
 
 import asyncio
+import base64
 import json
 import os
 from collections.abc import Callable
@@ -186,6 +187,8 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
     @guarded()
     async def today(request: Request, user: dict) -> Response:
         month = current_month()
+        if not ingest.has_input(home, month):
+            return JSONResponse({"month": month, "empty": True, "kinds": ingest.UPLOADABLE})
         run = months.latest(home, month)
         return JSONResponse({"month": month, "run": run_summary(run), "stale": months.is_stale(home, month),
                              "waiting": waiting(month), "closed": inbox.closed_count(home, month),
@@ -202,7 +205,8 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
         run = months.latest(home, month)
         items = inbox.mine(home, month, user)
         pack = packs.for_date(home, months.base_date(month))
-        return JSONResponse({"month": month, "bundles": inbox.bundles(items, run) if run else [],
+        return JSONResponse({"month": month, "calculated": run is not None,
+                             "bundles": inbox.bundles(items, run) if run else [],
                              "ranks": pack.ranks, "environment": workspace.config(home)["environment"],
                              "drafts": questions.cached(home, month), **links.board(home, month, run)})
 
@@ -256,6 +260,35 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
         data, month = await body(request), current_month()
         version, grew = ingest.confirm(home, month, data.get("kind", ""), data.get("token", ""), user)
         run, _ = months.run(home, month, None)
+        return JSONResponse({"version": version, "grew": grew, "stopped": run["stopped"]})
+
+    @guarded(write=True)
+    async def first_check(request: Request, user: dict) -> Response:
+        if len(await request.body()) > MAX_UPLOAD:
+            return error("ファイルが大きすぎます")
+        month, sent = current_month(), (await body(request)).get("files")
+        if ingest.has_input(home, month):
+            return error("もう今月のデータがあります。変えるファイルだけを渡してください")
+        if not isinstance(sent, dict):
+            return error("ファイルが届きませんでした")
+        try:
+            files = {kind: base64.b64decode(str(value), validate=True) for kind, value in sent.items()}
+        except ValueError:
+            return error("ファイルが読めません")
+        results = ingest.check_first(files, packs.for_date(home, months.base_date(month)))
+        count = sum(len(result.errors) for result in results.values())
+        audit.record(home, user, "データの検査", f"{month} 最初のデータ", f"拒否：{count}件" if count else "通った")
+        shown = {kind: {"rows": len(result.rows), "errors": result.errors} for kind, result in results.items()}
+        if count:
+            return JSONResponse({"ok": False, "files": shown})
+        return JSONResponse({"ok": True, "files": shown, "headcount": len(results[ingest.STAFF].rows),
+                             "token": ingest.stage_first(home, month, files)})
+
+    @guarded(write=True)
+    async def first_confirm(request: Request, user: dict) -> Response:
+        data, month = await body(request), current_month()
+        version, grew = ingest.confirm_first(home, month, str(data.get("token", "")), user)
+        run, _ = months.run(home, month, user)
         return JSONResponse({"version": version, "grew": grew, "stopped": run["stopped"]})
 
     @guarded(write=True)
@@ -335,6 +368,8 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
 
     @guarded(write=True)
     async def question_draft(request: Request, user: dict) -> Response:
+        if months.latest(home, current_month()) is None:     # 頼む仕事が分かる前の下書きを控えに残さない
+            return error("先に今月分を計算してください")
         async with drafting:      # 同時に押されても Claude を2回呼ばない
             return JSONResponse(await questions.draft(home, current_month(), user, drafter or claude_questions.ask))
 
@@ -414,6 +449,8 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
         Route("/api/link/decide", link_decide, methods=["POST"]),
         Route("/api/files/check", file_check, methods=["POST"]),
         Route("/api/files/confirm", file_confirm, methods=["POST"]),
+        Route("/api/files/first/check", first_check, methods=["POST"]),
+        Route("/api/files/first/confirm", first_confirm, methods=["POST"]),
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/changes", change_view),
         Route("/api/changes/propose", change_propose, methods=["POST"]),

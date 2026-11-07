@@ -8,6 +8,7 @@ import hashlib
 import io
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from agent.core import audit
@@ -25,8 +26,11 @@ COLUMNS = {
 }
 UPLOADABLE = (STAFF, ATTENDANCE, SEGMENTS, RANKS, FINANCE)
 SEGMENT_KINDS = {"通常", "新卒ローテ", "応援"}
+TOKEN = re.compile(r"[0-9a-f]{24}")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 NUMBER = re.compile(r"-?\d+(\.\d+)?")
+INTEGER = re.compile(r"-?\d+")
+STAFF_INTEGERS = ("表No", "等級", "号俸", "調整給", "処遇改善", "管理職手当", "特別加給金", "手入力の支給額", "手入力の分配金")
 INSTRUCTION = re.compile(r"(?i)(無視して|指示に従|命令|ignore (all|previous)|system prompt|あなたは.{0,20}(です|として))")
 MAX_ERRORS = 20
 
@@ -67,9 +71,33 @@ def latest_version(home: Path, month: str) -> int:
     return max(numbers)
 
 
+def has_input(home: Path, month: str) -> bool:
+    try:
+        latest_version(home, month)
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def load_rows(directory: Path, kind: str) -> list[dict]:
     path = directory / f"{kind}.csv"
     return read_rows(path.read_text("utf-8"))[1] if path.exists() else []
+
+
+def is_date(text: str) -> bool:
+    """形だけでなく、暦にある日かも見る。計算の時に初めて落ちないようにする。"""
+    if not DATE.fullmatch(text):
+        return False
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _integers(rows: list[dict], columns: tuple[str, ...]) -> list[str]:
+    return [f"{number}行目「{column}」：整数ではありません" for number, row in enumerate(rows, start=2)
+            for column in columns if row[column] and not INTEGER.fullmatch(row[column].strip())]
 
 
 def _cells(rows: list[dict]) -> list[str]:
@@ -119,9 +147,9 @@ def _segments(rows: list[dict], groups: set[str]) -> list[str]:
         if row["種類"] not in SEGMENT_KINDS:
             errors.append(f"{number}行目：種類「{row['種類']}」は通常、新卒ローテ、応援のどれかにしてください")
         for column in ("開始日", "終了日"):
-            if row[column] and not DATE.fullmatch(row[column]):
+            if row[column] and not is_date(row[column]):
                 errors.append(f"{number}行目「{column}」：日付は 2026-10-31 の形にしてください")
-        if not all(not row[c] or DATE.fullmatch(row[c]) for c in ("開始日", "終了日")):
+        if not all(not row[c] or is_date(row[c]) for c in ("開始日", "終了日")):
             continue
         start, end = row["開始日"], row["終了日"]
         if start and end and start > end:
@@ -140,9 +168,9 @@ def _staff(rows: list[dict], jobs: set[str]) -> list[str]:
     for number, row in enumerate(rows, start=2):
         if row["職種"] and row["職種"] not in jobs:
             errors.append(f"{number}行目：職種「{row['職種']}」は登録されていません")
-        if row["入職日"] and not DATE.fullmatch(row["入職日"]):
+        if row["入職日"] and not is_date(row["入職日"]):
             errors.append(f"{number}行目「入職日」：日付は 2026-10-31 の形にしてください")
-    return errors
+    return errors + _integers(rows, STAFF_INTEGERS)
 
 
 def check(kind: str, raw: bytes, *, known_ids: set[str], groups: set[str], jobs: set[str], ranks: set[str]) -> Check:
@@ -183,9 +211,62 @@ def check(kind: str, raw: bytes, *, known_ids: set[str], groups: set[str], jobs:
     if kind == ATTENDANCE:
         result.errors += [f"{n}行目「{c}」：数ではありません" for n, row in enumerate(rows, start=2)
                           for c in COLUMNS[kind][1:] if row[c] and not NUMBER.fullmatch(row[c])]
+        result.errors += _integers(rows, ("勤続月数",))
+    if kind == FINANCE:
+        result.errors += _integers(rows, tuple(COLUMNS[kind][1:]))
     result.errors = result.errors[:MAX_ERRORS]
     result.rows = [] if result.errors else rows
     return result
+
+
+def check_first(files: dict[str, bytes], pack) -> dict[str, Check]:
+    """最初の月の5つを検査する。職員を先に読み、残りはその名簿で調べる。"""
+    missing = [kind for kind in UPLOADABLE if kind not in files]
+    if missing:
+        raise ValueError(f"足りないファイルがあります：{'、'.join(missing)}")
+    extra = [kind for kind in files if kind not in UPLOADABLE]
+    if extra:
+        raise ValueError(f"受け取れないファイルがあります：{'、'.join(extra)}")
+    rules = {"groups": set(pack.groups), "jobs": set(pack.coefficients.job_coefficients), "ranks": set(pack.ranks)}
+    staff = check(STAFF, files[STAFF], known_ids=set(), **rules)
+    known = {row["職員番号"] for row in staff.rows}
+    return {STAFF: staff, **{kind: check(kind, files[kind], known_ids=known, **rules)
+                             for kind in UPLOADABLE if kind != STAFF}}
+
+
+def first_dir(home: Path, month: str, token: str) -> Path:
+    return home / "var" / "months" / month / "staged" / f"first-{token}"
+
+
+def stage_first(home: Path, month: str, files: dict[str, bytes]) -> str:
+    """検査に通った5つを1組で預かる。組で確定するので、別々の検査のファイルが混ざらない。"""
+    token = digest(repr(sorted((kind, digest(raw)) for kind, raw in files.items())).encode("utf-8"))[:24]
+    for kind, raw in files.items():
+        write_bytes(first_dir(home, month, token) / f"{kind}.csv", raw)
+    return token
+
+
+def confirm_first(home: Path, month: str, token: str, actor: dict) -> tuple[int, bool]:
+    """預かった組を最初の版にする。全部そろうか何も入らないかのどちらかで、一部だけの入力を作らない。"""
+    with locked(home):
+        staged = first_dir(home, month, token)
+        if not TOKEN.fullmatch(token) or not staged.is_dir():
+            raise FileNotFoundError("確定するファイルが見つかりません。もう一度渡してください")
+        files = {path.stem: decode(path.read_bytes()).encode("utf-8") for path in staged.glob("*.csv")}
+        if set(files) != set(UPLOADABLE):
+            raise FileNotFoundError("確定するファイルがそろっていません。もう一度渡してください")
+        if has_input(home, month):
+            current = latest_version(home, month)
+            directory = input_dir(home, month, current)
+            if all((directory / f"{kind}.csv").read_bytes() == raw for kind, raw in files.items()):
+                return current, False
+            raise ValueError("もう今月のデータがあります。変えるファイルだけを渡してください")
+        target = input_dir(home, month, 1)
+        for kind, raw in files.items():
+            write_bytes(target / f"{kind}.csv", raw)
+        write_json(target / "meta.json", {"by": actor["name"], "kind": "最初のデータ"})   # 最後に書く
+        audit.record(home, actor, "データの確定", f"{month} 最初のデータ", "新しい入力の版", "入力 1")
+        return 1, True
 
 
 def row_key(kind: str, row: dict) -> str:

@@ -5,7 +5,7 @@ const LABELS = { today: "今月", inbox: "確認", ask: "kounin に聞く", chan
 const STAGES = [["計算", "today"], ["確認", "inbox"], ["3案", "pay"], ["決定", "pay"], ["CSV", "pay"]];
 const PULSE_MS = 2500;
 const state = { session: null, pulse: null, drawn: null, quiet: false, shownStage: 0, seenRun: null, prevGroups: null,
-  fresh: {}, drafts: {}, open: {}, meters: {}, planPick: null, planTour: false, sealed: null, asks: {}, asksFor: null, drafting: null, editors: new Set() };
+  fresh: {}, drafts: {}, open: {}, meters: {}, planPick: null, planTour: false, sealed: null, asks: {}, asksFor: null, drafting: null, editors: new Set(), tray: {} };
 
 function h(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -161,9 +161,104 @@ function ghostField(count) {
 }
 const legend = () => h("div", { class: "legend" }, h("span", null, h("i", { class: "dot" }), "計算できた"), h("span", null, h("i", { class: "dot wait still" }), "確認が必要"));
 
+// ファイルを置く場所。選ぶことも、落とすこともできる
+function dropZone(label, multiple, onFiles) {
+  const input = h("input", { type: "file", multiple, accept: ".csv,text/csv", "aria-label": label, onchange: (event) => { if (event.target.files.length) onFiles([...event.target.files]); event.target.value = ""; } });
+  const zone = h("label", { class: "drop" }, input, h("span", null, "ファイルをここへ置く"), h("small", null, "CSV"));
+  const over = (on) => (event) => { event.preventDefault(); zone.classList.toggle("over", on); };
+  zone.addEventListener("dragover", over(true));
+  zone.addEventListener("dragleave", over(false));
+  zone.addEventListener("drop", (event) => { over(false)(event); if (event.dataTransfer.files.length) onFiles([...event.dataTransfer.files]); });
+  return zone;
+}
+const asBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+  reader.onerror = () => reject(new Error("ファイルが読めません"));
+  reader.readAsDataURL(file);
+});
+
+// 最初のデータ。5つそろうと検査し、人が確定すると計算する
+function firstScreen(data) {
+  const tray = state.tray;
+  let checked = null;
+  let turn = 0;     // 新しいファイルが置かれたら、古い検査の答えは捨てる
+  const title = h("h1", null, "今月のデータを入れます。");
+  const tiles = h("div", { class: "tray" });
+  const zoneSlot = h("div");
+  const report = h("div");
+  const stage = h("div", { class: "block" });
+  const slot = h("div");
+  const tile = (kind, index) => {
+    const file = tray[kind];
+    const result = checked && checked.files[kind];
+    const bad = result && result.errors.length;
+    const look = !file ? "" : !checked ? (tiles.dataset.busy ? " busy" : " placed") : bad ? " bad" : " ok";
+    const note = !file ? "" : !result ? file.name : bad ? `${result.errors.length}件` : `${plain(result.rows)}行`;
+    return h("div", { class: `tile${look}`, style: `--i:${index}` }, h("span", { class: "tile-mark" }, result && !bad ? mark() : null), h("b", null, kind), h("small", null, note));
+  };
+  const paint = () => {
+    tiles.replaceChildren(...data.kinds.map(tile));
+    const failed = checked && !checked.ok ? data.kinds.filter((kind) => checked.files[kind].errors.length) : [];
+    report.replaceChildren(...(failed.length ? [h("div", { class: "errors rise", role: "alert" }, h("b", null, "取り込みませんでした"),
+      failed.flatMap((kind) => checked.files[kind].errors.map((text) => h("span", null, `${kind}：${text}`))))] : []));
+  };
+  const check = async () => {
+    turn += 1;
+    const mine = turn;
+    checked = null;
+    tiles.dataset.busy = "1";
+    slot.replaceChildren();
+    stage.replaceChildren();
+    paint();
+    let answer = null;
+    try {
+      const entries = await Promise.all(data.kinds.map(async (kind) => [kind, await asBase64(tray[kind])]));
+      [answer] = await Promise.all([post("/api/files/first/check", { files: Object.fromEntries(entries) }), wait(900)]);
+    } catch (error) { if (mine === turn) slot.replaceChildren(problem(error.message)); }
+    if (mine !== turn) return;
+    checked = answer;
+    delete tiles.dataset.busy;
+    paint();
+    if (!checked || !checked.ok) return;
+    title.textContent = `${plain(checked.headcount)}人のデータです。`;
+    zoneSlot.replaceChildren();
+    const field = ghostField(checked.headcount);
+    field.classList.add("intro");
+    const button = h("button", { class: "primary" }, "今月分を計算する");
+    button.addEventListener("click", action(button, slot, async () => {
+      title.textContent = "計算しています";
+      field.classList.remove("intro");
+      field.classList.add("scan");
+      try { await Promise.all([post("/api/files/first/confirm", { token: checked.token }), wait(1200)]); }
+      catch (error) { title.textContent = `${plain(checked.headcount)}人のデータです。`; field.classList.remove("scan"); throw error; }
+      state.tray = {};
+      await render();
+    }));
+    stage.replaceChildren(button, field);
+  };
+  const place = (files) => {
+    slot.replaceChildren();
+    const lost = [];
+    for (const file of files) {
+      const kind = data.kinds.find((name) => file.name.includes(name));
+      if (kind) tray[kind] = file;
+      else lost.push(file.name);
+    }
+    if (lost.length) slot.replaceChildren(problem(`どのデータか分かりません：${lost.join("、")}`));
+    if (data.kinds.every((kind) => tray[kind])) check();
+    else { checked = null; paint(); }
+  };
+  zoneSlot.append(dropZone("今月のファイル", true, place));
+  frame("today", [h("div", { "data-hold": true }, h("div", { class: "eyebrow" }, monthLabel(data.month)), title), tiles, h("div", { class: "first" }, zoneSlot, report, slot, stage)]);
+  if (data.kinds.every((kind) => tray[kind])) check();
+  else paint();
+}
+
 // 今月
 async function todayScreen() {
   const data = await api("/api/today");
+  if (data.empty) { firstScreen(data); return; }
   const run = data.run;
   if (!run || data.stale) {
     const slot = h("div");
@@ -230,13 +325,7 @@ function fileCard(bundle, slot) {
     try { show(await api(`/api/files/check?kind=${encodeURIComponent(bundle.file)}`, { method: "POST", body: await file.arrayBuffer() })); }
     catch (error) { slot.replaceChildren(problem(error.message)); }
   };
-  const input = h("input", { type: "file", accept: ".csv,text/csv", "aria-label": `${bundle.file}のファイル`, onchange: (event) => { if (event.target.files.length) check(event.target.files[0]); } });
-  const zone = h("label", { class: "drop" }, input, h("span", null, "ファイルをここへ置く"), h("small", null, "CSV"));
-  const over = (on) => (event) => { event.preventDefault(); zone.classList.toggle("over", on); };
-  zone.addEventListener("dragover", over(true));
-  zone.addEventListener("dragleave", over(false));
-  zone.addEventListener("drop", (event) => { over(false)(event); if (event.dataTransfer.files.length) check(event.dataTransfer.files[0]); });
-  return h("div", { class: "block" }, zone, result);
+  return h("div", { class: "block" }, dropZone(`${bundle.file}のファイル`, false, (files) => check(files[0])), result);
 }
 
 // 一時URL。生の URL は作った時だけ画面に出す。サーバーはハッシュしか持たない
@@ -349,6 +438,10 @@ function interviewCard(others) {
 }
 async function inboxScreen() {
   const data = await api("/api/inbox");
+  if (!data.calculated) {
+    frame("inbox", [heading(monthLabel(data.month), "今月分をまだ計算していません。"), h("a", { class: "primary", href: "#today" }, "計算へ")]);
+    return;
+  }
   const asked = data.contacts.filter((row) => row.bundles.length || (row.link && row.link.status === "回答待ち") || state.fresh[row.id]);
   const others = data.contacts.filter((row) => !asked.includes(row));
   const count = [...data.bundles, ...data.contacts.flatMap((row) => row.bundles)].reduce((sum, bundle) => sum + bundle.count, 0);

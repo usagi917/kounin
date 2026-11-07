@@ -121,17 +121,13 @@ def is_ready(home: Path) -> bool:
 
 
 def init_sample(home: Path) -> None:
-    """架空環境を作る。既にあれば触らない。"""
+    """架空環境を作る。職員のデータは入れず、人事担当が渡す（SPEC §6）。既にあれば触らない。"""
     if is_ready(home):
         return
     pack = home / "pack" / "1"
     shutil.copytree(ROOT / "rules" / "sample", pack)
     write_json(pack / "meta.json", {"effective_from": FIRST_EFFECTIVE, "summary": "最初の版", "approved_by": None})
-    data = ROOT / "data" / "sample"
-    inputs = home / "var" / "months" / SAMPLE_MONTH / "inputs" / "1"
-    shutil.copytree(data / SAMPLE_MONTH, inputs)
-    write_json(inputs / "meta.json", {"note": "毎月のファイルが届いた状態", "by": None})
-    shutil.copy(data / "users.yaml", home / "users.yaml")
+    shutil.copy(ROOT / "data" / "sample" / "users.yaml", home / "users.yaml")
     write_text(home / "config.yaml", yaml.safe_dump(
         {"environment": SAMPLE_ENVIRONMENT, "current_month": SAMPLE_MONTH, "claude_allowed": False},
         allow_unicode=True))
