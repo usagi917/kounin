@@ -1,5 +1,6 @@
 """画面の API。ログインは人事担当だけで、ほかの人は一時URLで答える。検査はここで行い、業務は agent/core へ渡す。"""
 
+import asyncio
 import json
 import os
 from collections.abc import Callable
@@ -14,9 +15,10 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from agent.core import audit, changes, decisions, inbox, ingest, links, month as months, teach
+from agent.core import audit, changes, decisions, inbox, ingest, links, month as months, questions, teach
 from agent.core import pack as packs
 from agent.core import workspace
+from agent.sdk import questions as claude_questions
 from engine.hashing import stable_hash
 from ui.auth import COOKIE, Attempts, HostCheck, Sessions, csrf_ok, verify_password
 
@@ -33,7 +35,7 @@ def error(message: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
 
-def create_app(home: Path | None = None) -> Starlette:
+def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -> Starlette:
     home = home or workspace.resolve_home()
     if not workspace.is_ready(home):
         if os.environ.get(workspace.HOME_ENV):
@@ -42,6 +44,7 @@ def create_app(home: Path | None = None) -> Starlette:
     workspace.refresh_sample_users(home)
     sessions = Sessions()
     attempts = Attempts()
+    drafting = asyncio.Lock()
 
     def user_of(request: Request) -> dict | None:
         session = sessions.get(request.cookies.get(COOKIE))
@@ -201,7 +204,7 @@ def create_app(home: Path | None = None) -> Starlette:
         pack = packs.for_date(home, months.base_date(month))
         return JSONResponse({"month": month, "bundles": inbox.bundles(items, run) if run else [],
                              "ranks": pack.ranks, "environment": workspace.config(home)["environment"],
-                             **links.board(home, month, run)})
+                             "drafts": questions.cached(home, month), **links.board(home, month, run)})
 
     def own_item(month: str, item_id: str, user: dict, kind: str) -> dict:
         item = inbox.find(home, month, item_id)
@@ -331,6 +334,11 @@ def create_app(home: Path | None = None) -> Starlette:
         return JSONResponse({"token": token, "expires_at": record["expires_at"]})
 
     @guarded(write=True)
+    async def question_draft(request: Request, user: dict) -> Response:
+        async with drafting:      # 同時に押されても Claude を2回呼ばない
+            return JSONResponse(await questions.draft(home, current_month(), user, drafter or claude_questions.ask))
+
+    @guarded(write=True)
     async def link_revoke(request: Request, user: dict) -> Response:
         links.revoke(home, current_month(), str((await body(request)).get("id", "")), user)
         return JSONResponse({"ok": True})
@@ -398,6 +406,7 @@ def create_app(home: Path | None = None) -> Starlette:
         Route("/api/inbox/rank", answer_rank, methods=["POST"]),
         Route("/api/links", link_issue, methods=["POST"]),
         Route("/api/links/revoke", link_revoke, methods=["POST"]),
+        Route("/api/questions/draft", question_draft, methods=["POST"]),
         Route("/api/link", link_view),
         Route("/api/link/rank", link_rank, methods=["POST"]),
         Route("/api/link/judge", link_judge, methods=["POST"]),

@@ -6,15 +6,19 @@
 import csv
 import io
 from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 
 from agent.core import audit, month as months
 from agent.core.workspace import locked, read_json, write_json, write_text
+from engine import rounding
 from engine.hashing import stable_hash
 from engine.models import Strict
 
 CSV_COLUMNS = ["職員番号", "氏名", "本支給額", "精勤分配金", "特別加給金", "支給計"]
 DANGEROUS = ("=", "+", "-", "@", "\t", "\r")
+BAND_STEP = 50_000        # 案の比較に使う支給額の帯の幅
+BAND_TOP = 1_000_000      # これより上は1つの帯にまとめる
 
 
 class PayError(ValueError):
@@ -89,12 +93,38 @@ def current_plans(home: Path, month: str) -> dict | None:
     return read_json(path) if path.exists() else None
 
 
+def _band_edges(plans: list[dict]) -> list[int]:
+    """全案で共通の帯の下限。案を替えても同じ軸で比べられるようにする。"""
+    totals = [row["total"] for plan in plans for row in plan["rows"]]
+    low = min(totals) // BAND_STEP * BAND_STEP
+    high = min(max(totals) // BAND_STEP * BAND_STEP, BAND_TOP)
+    return list(range(low, max(high, low) + 1, BAND_STEP))
+
+
+def _bands(rows: list[dict], edges: list[int]) -> list[dict]:
+    counts = [0] * len(edges)
+    for row in rows:
+        counts[min((row["total"] - edges[0]) // BAND_STEP, len(edges) - 1)] += 1
+    return [{"from": edge, "count": count} for edge, count in zip(edges, counts)]
+
+
+def _moved(rows: list[dict], base: dict[str, int]) -> dict[str, int]:
+    gaps = [row["total"] - base[row["emp_id"]] for row in rows]
+    return {"up": sum(gap > 0 for gap in gaps), "down": sum(gap < 0 for gap in gaps),
+            "same": sum(gap == 0 for gap in gaps)}
+
+
 def summaries(data: dict) -> list[dict]:
-    """案の比較に要る総額だけを返す。個人別の金額は含めない。"""
-    base = data["plans"][0]
+    """案の比較に要る集計だけを返す。個人別の金額は含めない。"""
+    plans = data["plans"]
+    base = plans[0]
+    edges = _band_edges(plans)
+    before = {row["emp_id"]: row["total"] for row in base["rows"]}
     return [{key: plan[key] for key in ("id", "name", "fund", "total_pay", "unit_price")}
-            | {"delta": plan["total_pay"] - base["total_pay"], "people": len(plan["rows"])}
-            for plan in data["plans"]]
+            | {"delta": plan["total_pay"] - base["total_pay"], "people": len(plan["rows"]),
+               "average": rounding.yen(Fraction(plan["total_pay"], len(plan["rows"]))),
+               "step": BAND_STEP, "bands": _bands(plan["rows"], edges), "moved": _moved(plan["rows"], before)}
+            for plan in plans]
 
 
 def decide(home: Path, month: str, plan_id: str, actor: dict, expected_run: str | None = None) -> dict:

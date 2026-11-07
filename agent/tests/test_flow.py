@@ -204,6 +204,30 @@ def test_AC21_止まりがあると3案を作れない(home):
         decisions.build_plans(home, MONTH, HR)
 
 
+def test_3案の見せ方は集計だけで個人が分からない(home):
+    resolve_all(home)
+    data = decisions.build_plans(home, MONTH, HR)
+    plans = decisions.summaries(data)
+    assert {"rows", "result_hash"}.isdisjoint(plans[0])
+    assert not any(row["emp_id"] in str(plans) or row["name"] in str(plans) for row in data["plans"][0]["rows"])
+    assert plans[0]["step"] == decisions.BAND_STEP
+    edges = [band["from"] for band in plans[0]["bands"]]
+    assert edges == sorted(edges) and edges[-1] <= decisions.BAND_TOP
+    for plan, raw in zip(plans, data["plans"]):
+        assert [band["from"] for band in plan["bands"]] == edges       # 全案で同じ帯にする
+        assert sum(band["count"] for band in plan["bands"]) == plan["people"] == len(raw["rows"])
+        for band, following in zip(plan["bands"], plan["bands"][1:]):
+            assert band["count"] == sum(band["from"] <= row["total"] < following["from"] for row in raw["rows"])
+        assert plan["bands"][-1]["count"] == sum(row["total"] >= edges[-1] for row in raw["rows"])
+        assert sum(plan["moved"].values()) == plan["people"]
+    assert plans[0]["moved"] == {"up": 0, "down": 0, "same": plans[0]["people"]}
+    want = {row["emp_id"]: row["total"] for row in data["plans"][0]["rows"]}
+    rows = data["plans"][2]["rows"]
+    assert plans[2]["moved"]["down"] == sum(row["total"] < want[row["emp_id"]] for row in rows)
+    assert plans[2]["moved"]["up"] == sum(row["total"] > want[row["emp_id"]] for row in rows)
+    assert abs(plans[1]["average"] * plans[1]["people"] - plans[1]["total_pay"]) <= plans[1]["people"]
+
+
 def test_AC21とAC23_決定した案の試算とCSVが全員一致する(home):
     run = resolve_all(home)
     assert run["stopped"] == 0

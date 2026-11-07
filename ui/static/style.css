@@ -128,16 +128,53 @@ details summary:hover { color: var(--ink); }
 .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 /* 案の棒 */
-.plans { display: flex; flex-direction: column; gap: 12px; }
-.plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.bar-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
-.bar { height: 14px; border-radius: 4px; background: var(--wash); overflow: hidden; }
-.bar i { display: block; height: 100%; width: var(--w); border-radius: 4px; transform-origin: left; animation: grow .9s var(--ease) both; animation-delay: var(--d); }
-.bar .fund { background: var(--faint); }
-.bar .pay { background: var(--ink); }
-.bar-value { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.asks { display: flex; flex-direction: column; gap: 6px; }
+.ask { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 8px 6px 10px; border-radius: 10px; background: var(--wash); }
+.ask.fresh { animation: rise .45s var(--ease) backwards; animation-delay: calc(var(--o) * 140ms); }
+.ask-text { flex: 1 1 auto; min-width: 0; }
+.ask-x { flex: 0 0 auto; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.ask-x:hover { background: var(--hover); }
+.who-k { flex: 0 0 auto; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--clay); color: var(--ivory); font-family: var(--serif); font-size: 13px; line-height: 1; }
+.who-k.human { background: var(--ink); }
+.ask.thinking { color: var(--muted); }
+.wave { display: inline-flex; gap: 3px; }
+.wave b { width: 5px; height: 5px; border-radius: 50%; background: var(--clay); animation: beat 1s ease-in-out infinite; }
+.wave b:nth-child(2) { animation-delay: .15s; }
+.wave b:nth-child(3) { animation-delay: .3s; }
+.plan-stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.plan-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.plan-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 14px 16px; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; transition: border-color .25s, box-shadow .25s, transform .25s var(--ease); animation: rise .5s var(--ease) backwards; animation-delay: calc(var(--o) * 120ms); }
+.plan-card:hover { transform: translateY(-2px); }
+.plan-card.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.plan-card.chosen, .plan-card.chosen.on { border-color: var(--clay); box-shadow: 0 0 0 1px var(--clay); }
+.plan-top { display: flex; align-items: center; justify-content: space-between; min-height: 28px; }
+.plan-top b { font-family: var(--serif); font-size: 20px; font-weight: 500; }
+.plan-name { color: var(--muted); }
+.plan-total { font-family: var(--serif); font-size: 21px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-delta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.plan-bar { position: relative; display: block; height: 8px; margin-top: 8px; border-radius: 4px; background: var(--wash); }
+.plan-bar .pay { display: block; height: 100%; width: var(--w); border-radius: 4px; background: var(--ink); transform-origin: left; animation: grow .9s var(--ease) both; animation-delay: var(--d); }
+.plan-card.chosen .plan-bar .pay { background: var(--clay); }
+.plan-bar .fund { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--clay); }
+.dist-card { gap: 10px; }
+.dist-card h2 { font-size: 20px; }
+.dist { --dot: 8px; position: relative; width: 100%; min-height: 120px; margin-top: 18px; border-bottom: 1px solid var(--ink); }
+.dist-floor i { position: absolute; bottom: 0; background: var(--wash); border-radius: 3px 3px 0 0; }
+.pd { position: absolute; left: 0; top: 0; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--ink); transition: transform .75s var(--ease), background .5s; transition-delay: calc(var(--i) * .45ms); will-change: transform; }
+.dist.intro .pd { transition-duration: .9s; transition-delay: calc(var(--i) * .9ms); }
+.dist.won .pd { background: var(--clay); }
+.dist.snap .pd, .dist.snap .dist-mean { transition: none; }
+.dist-mean { position: absolute; left: 0; top: -18px; bottom: 0; width: 0; border-left: 1px dashed var(--clay); transition: transform .75s var(--ease); pointer-events: none; }
+.dist-mean span { position: absolute; top: -6px; left: 5px; color: var(--clay); white-space: nowrap; }
+.dist-axis { position: relative; height: 24px; color: var(--muted); }
+.dist-axis span { position: absolute; top: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dist-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dist-stats dt { color: var(--muted); }
+.dist-stats dd { font-family: var(--serif); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.moved { display: flex; flex-direction: column; gap: 6px; }
+.moved small { color: var(--muted); }
+.plan-stage.still .plan-card, .plan-stage.still .plan-bar .pay { animation: none; }
 .card.chosen { border-color: var(--clay); }
-.card.chosen .bar .pay { background: var(--clay); }
 .stamp { animation: stamp .45s var(--ease) both; }
 
 /* 増減の帯 */
@@ -179,7 +216,8 @@ th { font-weight: 500; color: var(--muted); }
 .ring path { stroke-dasharray: 26; stroke-dashoffset: 26; animation: draw .5s .25s var(--ease) forwards; }
 
 .rise { animation: rise .35s var(--ease) both; }
-.quiet .bar i, .quiet .split i, .quiet .stamp, .quiet .steps li { animation: none; }
+.quiet .split i, .quiet .stamp, .quiet .steps li { animation: none; }
+.quiet .stamp.seal { animation: stamp .45s var(--ease) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes pop { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: none; } }
 @keyframes beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
@@ -201,6 +239,18 @@ th { font-weight: 500; color: var(--muted); }
   .gate { grid-template-columns: minmax(0, 1fr); }
   .gate-art { display: none; }
   .gate-form { padding: 32px 16px; }
-  .bar-row { grid-template-columns: 56px minmax(0, 1fr); }
-  .bar-value { grid-column: 2; text-align: left; }
+  .plan-cards { gap: 6px; }
+  .plan-card { padding: 8px 10px; }
+  .plan-top { min-height: 24px; }
+  .plan-top b { font-size: 16px; }
+  .plan-top .tag { padding: 0 6px; font-size: 12px; }
+  .plan-name { font-size: 12px; }
+  .plan-delta { font-size: 11px; letter-spacing: -.02em; white-space: nowrap; }
+  .plan-total { font-size: 12px; letter-spacing: -.02em; }
+  .dist-stats { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+@media (max-width: 420px) {
+  .plan-card { padding: 8px 6px; }
+  .plan-total { font-size: 11px; }
+  .plan-delta { font-size: 10px; }
 }

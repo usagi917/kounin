@@ -1,4 +1,4 @@
-.PHONY: setup test check-public seed app reset eval
+.PHONY: setup test check-public seed app demo reset eval
 
 # 依存を入れる。pre-commit のフックは git の共通領域に入る。
 setup:
@@ -19,6 +19,11 @@ seed:
 # 架空環境を開く。127.0.0.1 だけで待ち受ける。
 app:
 	KOUNIN_FAKE=$${KOUNIN_FAKE-1} uv run python -m ui.serve
+
+# 確認まで終えた架空環境を別の場所に作って開く。make app の状態には触らない。
+demo:
+	KOUNIN_HOME=var/demo uv run python -m agent.core.demo
+	KOUNIN_HOME=var/demo KOUNIN_FAKE=1 uv run python -m ui.serve --port 8030
 
 # 架空環境を最初の状態へ戻す。手元環境は拒否する。
 reset:

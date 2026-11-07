@@ -5,7 +5,7 @@ const LABELS = { today: "今月", inbox: "確認", ask: "kounin に聞く", chan
 const STAGES = [["計算", "today"], ["確認", "inbox"], ["3案", "pay"], ["決定", "pay"], ["CSV", "pay"]];
 const PULSE_MS = 2500;
 const state = { session: null, pulse: null, drawn: null, quiet: false, shownStage: 0, seenRun: null, prevGroups: null,
-  fresh: {}, drafts: {}, open: {}, meters: {} };
+  fresh: {}, drafts: {}, open: {}, meters: {}, planPick: null, planTour: false, sealed: null, asks: {}, asksFor: null, drafting: null, editors: new Set() };
 
 function h(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -241,7 +241,6 @@ function fileCard(bundle, slot) {
 
 // 一時URL。生の URL は作った時だけ画面に出す。サーバーはハッシュしか持たない
 const ASKED = { rank: "考課", judge: "どの職場で数えるか" };
-const lines = (text) => text.split("\n").map((line) => line.trim()).filter(Boolean);
 async function makeLink(to, questions) {
   const data = await post("/api/links", { to, questions });
   state.fresh[to] = `${location.origin}/q#${data.token}`;
@@ -268,35 +267,96 @@ function linkState(contact, slot) {
   revoke.addEventListener("click", action(revoke, slot, async () => { await post("/api/links/revoke", { id: link.id }); delete state.fresh[contact.id]; await render(); }));
   return h("div", { class: "block" }, fresh, h("div", { class: "track" }, meter(contact.id, link.total ? link.done / link.total : 0), h("span", { class: `tag${live ? "" : " quietly"}` }, live ? "回答待ち" : link.status), h("span", { class: "small" }, text), live ? revoke : null));
 }
+// 面談の質問。kounin の下書きを人が消し、足す。URL を作る時に確定する。
+function seedAsks(month, drafts) {
+  if (state.asksFor !== month) { state.asks = {}; state.asksFor = month; state.drafting = null; }
+  for (const [id, rows] of Object.entries(drafts || {})) {
+    if (!state.asks[id]) state.asks[id] = rows.map((text, index) => ({ text, by: "kounin", fresh: true, order: index }));
+  }
+}
+const asksOf = (id) => (state.asks[id] || []).map((row) => row.text);
+function startDraft(month) {
+  if (state.drafting) return;
+  state.drafting = "busy";
+  post("/api/questions/draft").then((result) => {
+    seedAsks(month, result.drafts);
+    state.drafting = result.source;
+  }).catch(() => { state.drafting = "none"; }).finally(() => state.editors.forEach((refresh) => refresh()));
+}
+function askEditor(id, name) {
+  const list = h("ul", { class: "asks" });
+  const add = h("input", { type: "text", maxlength: 300, placeholder: "質問を足す", "aria-label": `${name}さんに足す質問` });
+  const refresh = () => {
+    if (!list.isConnected && list.dataset.drawn) { state.editors.delete(refresh); return; }
+    list.dataset.drawn = "1";
+    const rows = state.asks[id] || [];
+    if (!rows.length && state.drafting === "busy") {
+      list.replaceChildren(h("li", { class: "ask thinking", role: "status" }, h("span", { class: "who-k" }, "k"), h("span", null, "kounin が質問を考えています"), h("i", { class: "wave" }, h("b"), h("b"), h("b"))));
+      return;
+    }
+    list.replaceChildren(...rows.map((row) => {
+      const item = h("li", { class: `ask${row.fresh ? " fresh" : ""}`, style: `--o:${row.order || 0}` }, h("span", { class: `who-k${row.by === "人" ? " human" : ""}`, title: row.by === "人" ? "人事担当" : "kounin" }, row.by === "人" ? "人" : "k"), h("span", { class: "ask-text" }, row.text),
+        h("button", { type: "button", class: "ask-x", "aria-label": `「${row.text}」を消す`, onclick: () => { state.asks[id] = state.asks[id].filter((other) => other !== row); refresh(); } }, "×"));
+      row.fresh = false;
+      return item;
+    }));
+  };
+  const flush = () => {
+    const text = add.value.trim();
+    if (!text) return;
+    state.asks[id] = [...(state.asks[id] || []), { text, by: "人", fresh: true }];
+    add.value = "";
+    refresh();
+  };
+  const push = () => { flush(); add.focus(); };
+  add.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); push(); } });
+  const plus = h("button", { type: "button", class: "ghost", onclick: push }, "足す");
+  state.editors.add(refresh);
+  afterPaint(refresh);
+  const editor = h("div", { class: "block" }, list, h("div", { class: "url" }, add, plus));
+  editor.flush = flush;    // 足すを押さずに URL を作っても、入力を落とさない
+  return editor;
+}
 function contactCard(contact) {
   const slot = h("div");
   const count = contact.bundles.reduce((sum, bundle) => sum + bundle.count, 0);
   const live = contact.link && contact.link.status === "回答待ち";
-  const box = kept(`c:${contact.id}`, { "aria-label": `${contact.name}さんに面談で聞きたいこと`, placeholder: "1行に1問" });
   const make = h("button", { class: "ghost" }, live ? "URLを作り直す" : "URLを作る");
-  make.addEventListener("click", action(make, slot, () => makeLink(contact.id, lines(box.value))));
+  const editor = askEditor(contact.id, contact.name);
+  make.addEventListener("click", action(make, slot, () => { editor.flush(); return makeLink(contact.id, asksOf(contact.id)); }));
   return h("section", { class: "card" }, h("div", { class: "card-head" }, avatar(contact.name), h("div", { class: "id" }, h("h2", null, contact.name), h("small", null, contact.role)),
     count ? h("div", { class: "row end" }, pips(count), h("span", null, `${count}人`)) : null),
   linkState(contact, slot),
   count ? folded(`p:${contact.id}`, contact.bundles.map((bundle) => `${ASKED[bundle.kind]}（${bundle.count}人）`).join("・"), contact.bundles.map((bundle) => bundle.people.map((person) => h("div", { class: "person" }, idBlock(person))))) : null,
-  folded(`q:${contact.id}`, "面談の質問", box), slot, make);
+  h("h3", null, "面談の質問"), editor, slot, make);
 }
 function interviewCard(others) {
   const slot = h("div");
+  const holder = h("div");
   const who = h("select", { "aria-label": "聞く相手" }, others.map((row) => h("option", { value: row.id }, `${row.name}（${row.role}）`)));
-  const box = kept("interview", { "aria-label": "面談で聞きたいこと", placeholder: "1行に1問" });
+  const person = () => others.find((row) => row.id === who.value);
+  let editor = null;
+  const swap = () => {
+    if (editor) editor.flush();
+    editor = askEditor(who.value, person().name);
+    holder.replaceChildren(editor);
+  };
+  who.addEventListener("change", swap);
+  swap();
   const make = h("button", { class: "ghost" }, "URLを作る");
-  make.addEventListener("click", action(make, slot, async () => { await makeLink(who.value, lines(box.value)); delete state.drafts.interview; }));
-  const examples = ["今期、負担が増えた人はいますか", "来期の昇給で気になる人はいますか", "異動の予定はありますか"]
-    .map((text) => h("button", { class: "chip", onclick: () => { box.value = box.value ? `${box.value}\n${text}` : text; state.drafts.interview = box.value; box.focus(); } }, text));
-  return h("section", { class: "card" }, h("h2", null, "面談"), h("label", null, "相手", who), h("label", null, "質問", box), h("div", { class: "chips" }, examples), slot, make);
+  make.addEventListener("click", action(make, slot, () => { editor.flush(); return makeLink(who.value, asksOf(who.value)); }));
+  return h("section", { class: "card" }, h("h2", null, "面談"), h("label", null, "相手", who), holder, slot, make);
 }
 async function inboxScreen() {
   const data = await api("/api/inbox");
   const asked = data.contacts.filter((row) => row.bundles.length || (row.link && row.link.status === "回答待ち") || state.fresh[row.id]);
   const others = data.contacts.filter((row) => !asked.includes(row));
   const count = [...data.bundles, ...data.contacts.flatMap((row) => row.bundles)].reduce((sum, bundle) => sum + bundle.count, 0);
+  seedAsks(data.month, data.drafts);
+  state.editors.clear();
+  if (!data.drafts) startDraft(data.month);
   const blocks = [heading(monthLabel(data.month), count ? `確認が必要な人が${count}人います。` : "確認はすべて終わりました。")];
+  if (!count) blocks.push(h("a", { class: "primary", href: "#pay" }, "支給へ"));
   for (const bundle of data.bundles) {
     const slot = h("div");
     const rows = bundle.kind === "rank"
@@ -390,14 +450,180 @@ async function changeScreen() {
 }
 
 // 支給。案は同じ物差しの棒で比べる
-function planRow(plan, top, order, extra) {
-  const bar = (label, value, cls) => h("div", { class: "bar-row" }, h("span", { class: "small" }, label),
-    h("div", { class: "bar" }, h("i", { class: cls, style: `--w:${(value / top) * 100}%;--d:${order * 140}ms` })), h("span", { class: "bar-value" }, num(value, yen)));
-  return h("section", { class: `card plan${extra.chosen ? " chosen" : ""}` }, h("div", { class: "plan-head" }, h("h2", null, `案${plan.id} ${plan.name}`),
-    extra.chosen ? h("span", { class: "tag stamp" }, "決定") : order ? h("span", { class: "small" }, signed(plan.delta)) : null),
-  bar("原資", plan.fund, "fund"), bar("支給計", plan.total_pay, "pay"), extra.button || null);
-}
 const topOf = (plans) => Math.max(...plans.flatMap((plan) => [plan.fund, plan.total_pay]));
+
+// 数を今の値から次の値へ動かす。
+function liveNum(value, format) {
+  const node = h("span", { class: "num" }, format(value));
+  let shown = value;
+  let ticket = 0;
+  node.to = (next) => {
+    ticket += 1;
+    const mine = ticket;
+    const from = shown;
+    shown = next;
+    if (!moving()) { node.textContent = format(next); return; }
+    const start = performance.now();
+    const tick = (now) => {
+      if (mine !== ticket) return;
+      const t = Math.min(1, (now - start) / 700);
+      node.textContent = format(from + (next - from) * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) requestAnimationFrame(tick);
+      else node.textContent = format(next);
+    };
+    requestAnimationFrame(tick);
+  };
+  return node;
+}
+
+// 点の大きさと並びを、幅と一番高い帯から決める。
+function bandLayout(plans, width) {
+  const count = plans[0].bands.length;
+  const colW = width / count;
+  const most = Math.max(...plans.flatMap((plan) => plan.bands.map((band) => band.count)));
+  const fit = (pitch) => { const cols = Math.max(1, Math.floor(colW / pitch)); return { colW, pitch, cols, height: Math.ceil(most / cols) * pitch }; };
+  let pitch = 10;
+  while (pitch > 3 && fit(pitch).height > 250) pitch -= 1;
+  return fit(pitch);
+}
+function bandSpots(plan, layout) {
+  const spots = [];
+  plan.bands.forEach((band, index) => {
+    const left = index * layout.colW + (layout.colW - layout.cols * layout.pitch) / 2;
+    for (let i = 0; i < band.count; i += 1) {
+      spots.push([left + (i % layout.cols) * layout.pitch, layout.height - (Math.floor(i / layout.cols) + 1) * layout.pitch]);
+    }
+  });
+  return spots;
+}
+const bandLabel = (band, last) => `${band.from / 10000}万${last ? "〜" : ""}`;
+
+// 3案。1点が職員1人で、支給額の低い順に帯へ並ぶ。案を替えると全員が動く。
+function planStage(plans, { chosen = null, sealKey = null, onPick = null } = {}) {
+  const tour = state.planTour && moving();
+  state.planTour = false;
+  const entering = !state.quiet && moving();
+  const sealing = Boolean(chosen) && state.sealed !== sealKey && moving();
+  state.sealed = sealKey;
+  const base = plans[0];
+  const top = topOf(plans);
+  const find = (id) => plans.find((plan) => plan.id === id);
+  let current = find(sealing ? state.planPick : chosen || state.planPick) || base;
+  let touched = false;
+  let layout = null;
+
+  const dots = Array.from({ length: base.people }, (_, index) => h("i", { class: "pd", style: `--i:${index}` }));
+  const floor = h("div", { class: "dist-floor" });
+  const line = h("div", { class: "dist-mean" }, h("span", null, "平均"));
+  const chart = h("div", { class: "dist snap", role: "img" }, floor, dots, line);
+  const axis = h("div", { class: "dist-axis", "aria-hidden": "true" });
+  const title = h("h2", { "aria-live": "polite" }, "");
+  const fund = liveNum(current.fund, yen);
+  const gap = liveNum(current.total_pay - current.fund, (value) => signed(Math.round(value)));
+  const mean = liveNum(current.average, yen);
+  const moved = h("div", { class: "moved" });
+  const cards = plans.map((plan, order) => {
+    const stamp = h("span", { class: "plan-mark" });
+    const pay = h("i", { class: "pay", style: `--w:${(plan.total_pay / top) * 100}%;--d:${order * 140}ms` });
+    const card = h("button", { type: "button", class: "plan-card", style: `--o:${order}`, onclick: () => { touched = true; state.planPick = plan.id; show(plan); } },
+      h("span", { class: "plan-top" }, h("b", null, `案${plan.id}`), stamp),
+      h("span", { class: "plan-name" }, plan.name),
+      h("span", { class: "plan-total" }, num(plan.total_pay, yen)),
+      h("span", { class: "plan-delta" }, order ? signed(plan.delta) : " "),
+      h("span", { class: "plan-bar" }, pay, h("i", { class: "fund", style: `left:${(plan.fund / top) * 100}%` })));
+    card.stamp = stamp;
+    return card;
+  });
+
+  const paint = (plan) => {
+    const spots = bandSpots(plan, layout);
+    dots.forEach((dot, index) => { dot.style.transform = `translate(${spots[index][0]}px,${spots[index][1]}px)`; });
+    line.style.transform = `translateX(${Math.min(plan.bands.length, (plan.average - plan.bands[0].from) / plan.step) * layout.colW}px)`;
+  };
+  function show(plan) {
+    current = plan;
+    cards.forEach((card, index) => {
+      const on = plans[index] === plan;
+      card.setAttribute("aria-pressed", on ? "true" : "false");
+      card.classList.toggle("on", on);
+    });
+    title.textContent = `案${plan.id} ${plan.name}`;
+    chart.setAttribute("aria-label", `案${plan.id}の支給額の分布。${plan.people}人、1人平均${plan.average.toLocaleString("ja-JP")}円`);
+    chart.classList.toggle("won", plan.id === chosen);
+    fund.to(plan.fund);
+    gap.to(plan.total_pay - plan.fund);
+    mean.to(plan.average);
+    moved.replaceChildren(h("small", null, `案${base.id}とくらべて`), split(plan.moved));
+    if (layout) paint(plan);
+    if (onPick) onPick(plan);
+  }
+  const seal = () => {
+    const card = cards[plans.indexOf(find(chosen))];
+    card.classList.add("chosen");
+    card.stamp.replaceChildren(h("span", { class: `tag stamp${sealing ? " seal" : ""}` }, "決定"));
+  };
+  const size = (width) => {
+    layout = bandLayout(plans, width);
+    const dotSize = `${Math.max(2, layout.pitch - 1)}px`;
+    chart.style.height = `${layout.height}px`;
+    chart.style.setProperty("--dot", dotSize);
+    floor.replaceChildren(...base.bands.map((band, index) => h("i", { style: `left:${index * layout.colW}px;width:${layout.colW}px;height:${Math.ceil(band.count / layout.cols) * layout.pitch}px` })));
+    const skip = Math.ceil(46 / layout.colW);
+    const end = base.bands.length - 1;
+    const shown = base.bands.map((_, index) => index).filter((index) => index === end || (index % skip === 0 && end - index >= skip));
+    axis.replaceChildren(...shown.map((index) => h("span", { style: index === end ? "right:0" : `left:${index * layout.colW}px` }, bandLabel(base.bands[index], index === end))));
+  };
+  const enter = async () => {
+    if (entering) {
+      const across = Math.max(1, Math.floor(chart.clientWidth / layout.pitch));
+      dots.forEach((dot, index) => { dot.style.transform = `translate(${(index % across) * layout.pitch}px,${Math.floor(index / across) * layout.pitch}px)`; });
+      chart.getBoundingClientRect();
+      chart.classList.remove("snap");
+      chart.classList.add("intro");
+      afterPaint(() => paint(current));
+      await wait(1400);
+      chart.classList.remove("intro");
+    } else {
+      paint(current);
+      chart.getBoundingClientRect();
+      chart.classList.remove("snap");
+    }
+    if (sealing) {
+      await wait(entering ? 300 : 500);
+      if (!chart.isConnected) return;
+      show(find(chosen));
+      seal();
+    } else if (tour) {
+      for (const plan of [...plans.slice(1), base]) {
+        await wait(1500);
+        if (touched || !chart.isConnected) return;
+        show(plan);
+      }
+    }
+  };
+  let ready = false;
+  new ResizeObserver(([entry]) => {
+    const width = entry.contentRect.width;
+    if (!width) return;
+    size(width);
+    if (ready) {
+      chart.classList.add("snap");
+      paint(current);
+      chart.getBoundingClientRect();
+      chart.classList.remove("snap");
+    } else {
+      ready = true;
+      enter();
+    }
+  }).observe(chart);
+
+  show(current);
+  if (chosen && !sealing) seal();
+  return h("div", { class: `plan-stage${state.quiet ? " still" : ""}` }, h("div", { class: "plan-cards" }, cards),
+    h("section", { class: "card dist-card" }, title, chart, axis,
+      h("dl", { class: "dist-stats" }, h("div", null, h("dt", null, "原資"), h("dd", null, fund)), h("div", null, h("dt", null, "原資との差"), h("dd", null, gap)), h("div", null, h("dt", null, "1人平均"), h("dd", null, mean))),
+      moved));
+}
 
 async function payScreen() {
   const data = await api("/api/pay");
@@ -410,12 +636,19 @@ async function payScreen() {
     blocks.push(heading("支給", why), h("a", { class: "primary", href: !run || data.stale ? "#today" : "#inbox" }, !run || data.stale ? "計算へ" : "確認へ"));
   } else if (!data.plans) {
     const button = h("button", { class: "primary" }, "3案を作る");
-    button.addEventListener("click", action(button, slot, async () => { await post("/api/pay/plans"); await render(); }));
-    blocks.push(heading(`支給・${run.period_name}`, "原資の3案を作ります。"), h("dl", { class: "stats" }, stat("対象", num(run.total), "人"), stat("支給日", dayLabel(run.payment_date))), button, slot);
+    const field = ghostField(run.total);
+    button.addEventListener("click", action(button, slot, async () => {
+      field.classList.add("scan");
+      try { await Promise.all([post("/api/pay/plans"), moving() ? wait(1500) : null]); }
+      finally { field.classList.remove("scan"); }
+      state.planTour = true;
+      await render();
+    }));
+    blocks.push(heading(`支給・${run.period_name}`, "原資の3案を作ります。"), h("dl", { class: "stats" }, stat("対象", num(run.total), "人"), stat("支給日", dayLabel(run.payment_date))), field, button, slot);
   } else {
-    const top = topOf(data.plans);
-    blocks.push(heading(`支給・${run.period_name}`, decided ? `案${decided.plan_id}「${decided.plan_name}」に決まりました。` : "理事長の決定を待っています。"));
-    blocks.push(h("div", { class: "plans" }, data.plans.map((plan, order) => planRow(plan, top, order, { chosen: decided && decided.plan_id === plan.id }))));
+    const asked = data.chair && data.chair.link && data.chair.link.status === "回答待ち";
+    blocks.push(heading(`支給・${run.period_name}`, decided ? `案${decided.plan_id}「${decided.plan_name}」に決まりました。` : asked ? "理事長の決定を待っています。" : "3案ができました。"));
+    blocks.push(planStage(data.plans, { chosen: decided && decided.plan_id, sealKey: decided && `${decided.plan_id}:${decided.at}` }));
     if (decided) {
       const button = h("button", { class: "primary" }, "給与システム用の CSV を出す");
       button.addEventListener("click", action(button, slot, async () => {
@@ -513,12 +746,11 @@ async function linkPage() {
   if (data.decide && data.decide.changed) blocks.push(h("div", { class: "errors", role: "alert" }, h("b", null, "案が変わりました"), h("span", null, "人事担当に新しいURLをもらってください。")));
   else if (data.decide) {
     const slot = h("div");
-    const top = topOf(data.decide.plans);
-    blocks.push(h("section", { class: "block" }, h("h2", null, "原資の3案から1案を決めてください"), slot, h("div", { class: "plans" }, data.decide.plans.map((plan, order) => {
-      const button = h("button", { class: "ghost" }, "この案に決める");
-      button.addEventListener("click", action(button, slot, async () => { await linkApi("/api/link/decide", { plan_id: plan.id }); await linkPage(); }));
-      return planRow(plan, top, order, { button });
-    }))));
+    const button = h("button", { class: "primary" });
+    let picked = null;
+    button.addEventListener("click", action(button, slot, async () => { await linkApi("/api/link/decide", { plan_id: picked.id }); await linkPage(); }));
+    const stage = planStage(data.decide.plans, { onPick: (plan) => { picked = plan; button.textContent = `案${plan.id}に決める`; } });
+    blocks.push(h("section", { class: "block" }, h("h2", null, "原資の3案から1案を決めてください"), stage, slot, button));
   }
   solo(blocks);
 }

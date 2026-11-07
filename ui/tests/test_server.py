@@ -392,3 +392,19 @@ def test_画面のスクリプトに構文の誤りがない():
     script = Path(__file__).resolve().parents[1] / "static" / "app.js"
     result = subprocess.run(["node", "--check", str(script)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_質問の下書きは人事担当だけが頼めて確認の画面に出る(tmp_path):
+    home = tmp_path / "home"
+    workspace.init_sample(home)
+
+    async def ask(payload):
+        return {"people": [{"ref": row["ref"], "questions": ["異動の予定はありますか"]} for row in payload["people"]]}
+    app = create_app(home, ask)
+    assert client(app).post("/api/questions/draft", headers={"X-CSRF-Token": "x"}).status_code in (401, 403)
+    hr, hr_h = login(app)
+    assert hr.post("/api/run", headers=hr_h).status_code == 200
+    assert hr.get("/api/inbox").json()["drafts"] is None
+    result = hr.post("/api/questions/draft", headers=hr_h).json()
+    assert result["source"] == "claude" and result["drafts"]["boss-a"] == ["異動の予定はありますか"]
+    assert hr.get("/api/inbox").json()["drafts"] == result["drafts"]
