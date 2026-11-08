@@ -24,6 +24,15 @@ from engine.hashing import stable_hash
 from ui.auth import COOKIE, Attempts, HostCheck, Sessions, csrf_ok, verify_password
 
 STATIC = Path(__file__).parent / "static"
+
+
+class FreshStatic(StaticFiles):
+    """直した画面がすぐ届くよう、ブラウザに毎回 ETag で確かめさせる。"""
+
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 MAX_UPLOAD = 20 * 1024 * 1024
 HR = "人事担当"
 OK_CATEGORIES = ("通常ルール適用", "例外適用")
@@ -460,7 +469,7 @@ def create_app(home: Path | None = None, drafter: questions.Ask | None = None) -
         Route("/api/pay/plans", pay_plans, methods=["POST"]),
         Route("/api/pay/export", pay_export, methods=["POST"]),
         Route("/api/history", history),
-        Mount("/static", StaticFiles(directory=STATIC)),
+        Mount("/static", FreshStatic(directory=STATIC)),
     ]
     return Starlette(routes=routes, middleware=[Middleware(HostCheck)])
 

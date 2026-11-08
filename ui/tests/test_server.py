@@ -487,3 +487,9 @@ def test_計算の前は確認が終わったと見せず質問の下書きも�
     assert hr.get("/api/inbox").json()["calculated"] is False
     response = hr.post("/api/questions/draft", headers=headers)
     assert response.status_code == 400 and "計算" in response.json()["error"] and called == []
+
+
+def test_静的ファイルは毎回サーバーへ確かめさせる(app):
+    response = client(app).get("/static/app.js")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"

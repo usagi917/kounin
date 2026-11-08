@@ -125,15 +125,14 @@ function flowBar() {
 }
 
 function frame(screen, content) {
-  const { user, screens, environment } = state.session;
+  const { user, screens } = state.session;
   const nav = screens.map((name) => h("a", { href: `#${name}`, "aria-current": name === screen ? "page" : null }, LABELS[name]));
   const logout = h("button", { class: "ghost", onclick: async () => { await post("/api/logout"); clearHash(); await boot(); } }, "ログアウト");
   document.getElementById("app").replaceChildren(h("div", { class: `page${state.quiet ? " quiet" : ""}` },
     h("header", { class: "top" }, h("a", { class: "brand", href: "#" }, "kounin"), h("nav", { class: "nav", "aria-label": "画面" }, nav),
       h("div", { class: "who" }, avatar(user.name), h("b", null, user.name), logout)),
     flowBar(),
-    h("main", { class: `main${state.quiet ? "" : " rise"}` }, content),
-    h("footer", { class: "foot" }, h("span", null, "法令判断は参考情報です"), h("span", null, environment))));
+    h("main", { class: `main${state.quiet ? "" : " rise"}` }, content)));
 }
 
 function heading(eyebrow, title) {
@@ -777,7 +776,6 @@ async function historyScreen() {
 
 // ログイン
 function loginScreen() {
-  const { environment } = state.session;
   const slot = h("div");
   const id = h("input", { type: "text", name: "username", autocomplete: "username", required: true, "aria-label": "ログインID" });
   const password = h("input", { type: "password", name: "password", autocomplete: "current-password", required: true, "aria-label": "パスワード" });
@@ -786,8 +784,7 @@ function loginScreen() {
   document.getElementById("app").replaceChildren(h("div", { class: "gate" },
     h("div", { class: "gate-art", "aria-hidden": "true" }, Array.from({ length: 220 }, (_, index) => h("i", { class: "dot", style: `--i:${index}` }))),
     h("form", { class: "gate-form rise", onsubmit: (event) => { event.preventDefault(); submit(); } },
-      h("div", { class: "brand big" }, "kounin"), h("label", null, "ログインID", id), h("label", null, "パスワード", password), slot, button,
-      h("div", { class: "gate-foot" }, h("span", null, "法令判断は参考情報です"), h("span", null, environment)))));
+      h("div", { class: "brand big" }, "kounin"), h("label", null, "ログインID", id), h("label", null, "パスワード", password), slot, button)));
   id.focus();
 }
 
@@ -802,7 +799,7 @@ async function linkApi(path, data) {
   if (!response.ok) throw Object.assign(new Error(body.error || "うまくいきませんでした"), { closed: response.status === 410, done: body.done });
   return body;
 }
-const solo = (...children) => document.getElementById("app").replaceChildren(h("div", { class: "solo" }, h("div", { class: "brand" }, "kounin"), children, h("p", { class: "small" }, "法令判断は参考情報です")));
+const solo = (...children) => document.getElementById("app").replaceChildren(h("div", { class: "solo" }, h("div", { class: "brand" }, "kounin"), children));
 async function leave(node) {
   if (!moving()) return;
   node.classList.add("leaving");
