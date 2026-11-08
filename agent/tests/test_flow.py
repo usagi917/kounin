@@ -13,7 +13,7 @@ MONTH = "2026-10"
 HR = {"id": "hr", "name": "人事", "role": "人事担当"}
 BOSS = {"id": "boss-a", "name": "上司", "role": "上司"}
 BOSS_B = {"id": "boss-b", "name": "別の上司", "role": "上司"}
-PRE = {"id": "predecessor", "name": "前任", "role": "前任"}
+PRE = {"id": "predecessor", "name": "職員", "role": "職員"}
 CHAIR = {"id": "chair", "name": "理事長", "role": "理事長"}
 FIXES = workspace.ROOT / "data" / "sample" / "fixes"
 

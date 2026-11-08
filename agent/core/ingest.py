@@ -350,14 +350,14 @@ def answer_rank(home: Path, month: str, emp_id: str, rank: str, actor: dict) -> 
 
 
 def answer_judgment(home: Path, month: str, emp_id: str, group: str, actor: dict) -> int:
-    """前任の判定を判定のファイルの新しい版にする。その期のその人にだけ効く。"""
+    """職員の判定を判定のファイルの新しい版にする。その期のその人にだけ効く。"""
     with locked(home):
         directory = input_dir(home, month)
         rows = [row for row in load_rows(directory, JUDGMENTS) if row["職員番号"] != emp_id]
         rows.append({"職員番号": emp_id, "職場": group, "判定者": actor["name"]})
         version = new_version(home, month, {JUDGMENTS: rewrite(JUDGMENTS, rows)},
                               {"by": actor["name"], "kind": JUDGMENTS})
-        audit.record(home, actor, "前任の判定", f"{month} 1人", "新しい入力の版", f"入力 {version}")
+        audit.record(home, actor, "職員の判定", f"{month} 1人", "新しい入力の版", f"入力 {version}")
         return version
 
 

@@ -39,7 +39,7 @@ def _route(person: dict, people: list[dict]) -> dict | None:
             to = {"role": "上司", "user_id": boss["id"]} if boss else _hr()
             return {"kind": RANK, "reason": "考課が届いていない", "to": to}
         return {"kind": FILE, "file": ingest.STAFF, "reason": "職員の項目が欠けている", "to": _hr()}
-    return {"kind": JUDGE, "reason": "どの職場で数えるかが決まっていない", "to": {"role": "前任", "user_id": None}}
+    return {"kind": JUDGE, "reason": "どの職場で数えるかが決まっていない", "to": {"role": "職員", "user_id": None}}
 
 
 def sync(home: Path, month: str, run: dict) -> None:

@@ -114,8 +114,8 @@ def generate(count: int = 550) -> dict[str, str]:
 
     # 止まる人。連絡の相手が違うように分ける
     gaps = take(3)                 # 所属の日付が欠けている → 人事担当がファイルを渡す
-    support = take(3)              # 応援が4か月以上 → 前任が判定する
-    tie = take(1)                  # 3か月ずつの異動 → 前任が判定する
+    support = take(3)              # 応援が4か月以上 → 職員が判定する
+    tie = take(1)                  # 3か月ずつの異動 → 職員が判定する
     transfers = take(30)           # 通常の異動 → R001 で進む
     rotation = take(3)             # 新卒ローテ → R001 で進む
     hires = take(5)                # 入職4か月未満 → R002 で進む

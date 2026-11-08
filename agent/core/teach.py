@@ -10,7 +10,7 @@ from agent.core import month as months
 from agent.core import pack as packs
 from engine.procedure import BONUS_STEPS, RAISE_STEPS
 
-NOT_TAUGHT = "まだ教わっていません。前任か人事担当に確かめてください。"
+NOT_TAUGHT = "まだ教わっていません。職員か人事担当に確かめてください。"
 PERSON_ID = re.compile(r"\d{6}")
 
 
